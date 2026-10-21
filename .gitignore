@@ -4,6 +4,10 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### Documents & Sujets de TP ###
+*.pdf
+*.docx
+
 ### STS ###
 .apt_generated
 .classpath
@@ -31,3 +35,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### OS / Temp ###
+.DS_Store
+Thumbs.db
