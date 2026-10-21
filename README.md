@@ -1,230 +1,25 @@
-# TP — Architecture Hexagonale avec Spring Boot 4.1.1
+# TP - Architecture Hexagonale avec Spring Boot 4
+## Réponses aux Questions
 
-Ce projet est une API REST de catalogue de cafés développée selon les principes de l'**Architecture Hexagonale (Ports et Adaptateurs)** avec **Spring Boot 4.1.1**, **Java 25**, **Hibernate 7**, **Flyway**, **MapStruct 1.6.3**, et **SpringDoc OpenAPI 3.1.0**.
+1. Pourquoi le domaine n'importe-t-il ni Spring ni JPA ? Que gagne-t-on concrètement pour les tests ?
+On a vu que Le domaine n'importe rien de technique ; l'application n'importe ni adaptateur ni Spring car les Les dépendances pointent vers l'intérieur
 
----
+2. Pourquoi le service applicatif n'a-t-il ni `@Service` ni `@Transactional` ? Qui ouvre et ferme les transactions ?
+car le service applicatif doit rester du java pur
 
-## 🏛️ Les 5 principes appliqués
+3. Pourquoi garder deux classes distinctes `Coffee` et `CoffeeJpaEntity` au lieu d'annoter directement le domaine ?
+Pour permettre de séparer les responsabilités 
 
-1. **Le Domaine est au centre** : Écrit en Java pur (aucun import Spring ni JPA), il modélise le métier et applique ses invariants via des objets-valeurs (`Price`, `CoffeeId`, `ReviewId`) et l'agrégat `Coffee`.
-2. **L'Application déclare des ports** :
-   - *Ports entrants* (`port.in`) : Interfaces des cas d'utilisation (`...UseCase`) et requêtes (`...Query`).
-   - *Ports sortants* (`port.out`) : Interfaces décrivant les besoins externes (`LoadCoffeePort`, `SaveCoffeePort`, `TransactionRunner`).
-3. **Les Adaptateurs traduisent** :
-   - Web (`adapter.in.web`) : HTTP / JSON $\leftrightarrow$ Commandes / Requêtes applicatives.
-   - Persistance (`adapter.out.persistence`) : Entités JPA $\leftrightarrow$ Objets métier du Domaine.
-   - Les adaptateurs restent *package-private* pour masquer leurs détails techniques.
-4. **Toutes les dépendances pointent vers l'intérieur** : Le domaine n'a aucune dépendance technique externe ; l'application n'importe aucun adaptateur.
-5. **Câblage explicite via une seule classe de configuration** : `UseCaseConfig` déclare `CoffeeApplicationService` en tant que Bean Spring et y injecte les adaptateurs.
+4. La règle « prix entre 0 et 200 » est vérifiée dans le domaine et dans une contrainte SQL, mais pas dans le DTO. Pourquoi ?
+ya pas besoin de le modif dans le dto normalement tu as besoin de changer seulement dans le domaine
 
----
+5. Pourquoi un prix de 500 donne-t-il un 422 alors qu'un nom vide donne un 400 ?
+c'est pas la meme erreur, si le nom est vide alors c'est un probleme de requete
 
-## 📁 Arborescence du Projet
+6. Que se passerait-il sans `@EntityGraph` sur le repository ? Comment l'observer dans les logs ?
+Ce serait beaucoup moins optimisée donc potentiellement des soucis de performance 
 
-```text
-org.formation.coffee
-├── CoffeeHexaSimpleApplication.java
-├── domain
-│   ├── model
-│   │   ├── Coffee.java            # Racine d'agrégat
-│   │   ├── CoffeeId.java          # Identifiant typé
-│   │   ├── ReviewId.java          # Identifiant typé
-│   │   ├── Price.java             # Objet-valeur (0 à 200)
-│   │   └── Review.java            # Entité interne d'agrégat
-│   └── exception
-│       ├── DomainException.java
-│       ├── DomainValidationException.java
-│       └── CoffeeNotFoundException.java
-├── application
-│   ├── port
-│   │   ├── in                     # Ce que l'application offre
-│   │   │   ├── ListCoffeesQuery.java
-│   │   │   ├── GetCoffeeQuery.java
-│   │   │   ├── CreateCoffeeUseCase.java
-│   │   │   ├── UpdateCoffeeUseCase.java
-│   │   │   ├── CreateCoffeeCommand.java
-│   │   │   └── UpdateCoffeeCommand.java
-│   │   └── out                    # Ce dont l'application a besoin
-│   │       ├── LoadCoffeePort.java
-│   │       ├── SaveCoffeePort.java
-│   │       └── TransactionRunner.java
-│   └── service
-│       └── CoffeeApplicationService.java
-├── adapter
-│   ├── in
-│   │   └── web                    # Adaptateur entrant REST
-│   │       ├── CoffeeController.java
-│   │       ├── CoffeeWebMapper.java
-│   │       ├── RestExceptionHandler.java
-│   │       └── dto
-│   │           ├── CreateCoffeeRequest.java
-│   │           ├── UpdateCoffeeRequest.java
-│   │           ├── CoffeeResponse.java
-│   │           └── ReviewResponse.java
-│   └── out
-│       ├── persistence            # Adaptateur sortant JPA
-│       │   ├── CoffeeJpaEntity.java
-│       │   ├── ReviewJpaEntity.java
-│       │   ├── CoffeeJpaRepository.java
-│       │   ├── CoffeePersistenceMapper.java
-│       │   └── CoffeePersistenceAdapter.java
-│       └── transaction            # Adaptateur sortant Transactions
-│           └── SpringTransactionRunner.java
-└── config
-    └── UseCaseConfig.java
-```
-
----
-
-## 🚀 Démarrage et Tests
-
-### 1. Prérequis
-- **JDK 25** configuré (ex. `JAVA_HOME` pointant vers JDK 25).
-- Maven Wrapper embarqué (`mvnw` / `mvnw.cmd`).
-
-### 2. Compilation et tests
-```powershell
-$env:JAVA_HOME = "C:\Users\admin\.jdks\openjdk-25"
-$env:Path = "C:\Users\admin\.jdks\openjdk-25\bin;" + $env:Path
-.\mvnw.cmd clean test
-```
-*Vérifications assurées par les tests :*
-- Validation complète des schémas Flyway et des entités Hibernate.
-- Démarrage du contexte applicatif Spring Boot.
-- Tests unitaires sans base de données (`CoffeeTest`, `CoffeeApplicationServiceTest`) s'exécutant en quelques millisecondes.
-
-### 3. Lancer l'application
-```powershell
-.\mvnw.cmd spring-boot:run
-```
-L'application démarre sur le port `8080` avec le profil `dev` actif par défaut.
-
----
-
-## 📡 Endpoints de l'API REST
-
-| Méthode | URI | En-têtes | Description |
-|---|---|---|---|
-| `GET` | `/api/coffees` | `API-Version: 1` *(défaut)* | Liste tous les cafés avec leurs avis |
-| `GET` | `/api/coffees/{id}` | `API-Version: 1` *(défaut)* | Obtenir un café par son identifiant |
-| `POST` | `/api/coffees` | `Content-Type: application/json` | Créer un nouveau café (renvoie `201 Created` + `Location`) |
-| `PATCH` | `/api/coffees/{id}` | `Content-Type: application/json` | Modifier partiellement le nom et/ou le prix d'un café |
-
-### Outils de développement intégrés (profil `dev`) :
-- **Swagger UI** : [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
-- **Console H2** : [http://localhost:8080/h2-console](http://localhost:8080/h2-console) (JDBC URL: `jdbc:h2:mem:coffee`, user: `sa`, mot de passe vide)
-- **Actuator Health** : [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
-
----
-
-## 🧪 Exemples d'appels cURL (Validation)
-
-### 1. Lister tous les cafés (chargement avec jointure `@EntityGraph`)
-```powershell
-curl.exe -s localhost:8080/api/coffees
-```
-**Réponse :**
-```json
-[
-  {"id":1,"name":"Granador","price":10,"reviews":[{"id":1,"author":"Ana","comment":"Intense","rating":5},{"id":2,"author":"Beto","comment":"Equilibre","rating":4}]},
-  {"id":2,"name":"Tres Puntas","price":70,"reviews":[{"id":3,"author":"Cleo","comment":"Trop fort","rating":2}]},
-  {"id":3,"name":"Estrellas","price":4,"reviews":[]}
-]
-```
-
-### 2. Créer un café valide (Code 201)
-```powershell
-curl.exe --% -s -i -X POST localhost:8080/api/coffees -H "Content-Type: application/json" -d "{\"name\":\"Yirgacheffe\",\"price\":25}"
-```
-**Réponse :** `HTTP/1.1 201 Created` avec en-tête `Location: http://localhost:8080/api/coffees/4`.
-
-### 3. Violation d'une règle métier (Code 422)
-```powershell
-curl.exe --% -s -X POST localhost:8080/api/coffees -H "Content-Type: application/json" -d "{\"name\":\"Gold\",\"price\":500}"
-```
-**Réponse :**
-```json
-{
-  "detail": "Price must be between 0 and 200, got 500",
-  "instance": "/api/coffees",
-  "status": 422,
-  "title": "Business rule violated"
-}
-```
-
-### 4. Requête mal formée (Code 400 via `@Valid`)
-```powershell
-curl.exe --% -s -i -X POST localhost:8080/api/coffees -H "Content-Type: application/json" -d "{\"name\":\" \"}"
-```
-**Réponse :** `HTTP/1.1 400 Bad Request` au format standard RFC 9457 Problem Details.
-
-### 5. Café inexistant (Code 404)
-```powershell
-curl.exe -s -i localhost:8080/api/coffees/999
-```
-**Réponse :**
-```json
-{
-  "detail": "Coffee 999 not found",
-  "instance": "/api/coffees/999",
-  "status": 404,
-  "title": "Coffee not found",
-  "coffeeId": 999
-}
-```
-
-### 6. Versionnement d'API
-```powershell
-# Version 1 (supportée) -> 200 OK
-curl.exe -s -o /dev/null -w "%{http_code}`n" localhost:8080/api/coffees -H "API-Version: 1"
-
-# Version 2 (non supportée) -> 400 Bad Request
-curl.exe -s localhost:8080/api/coffees -H "API-Version: 2"
-```
-
----
-
-## ❓ Réponses aux Questions du TP (Page 35)
-
-### 1. Pourquoi le domaine n'importe-t-il ni Spring ni JPA ? Que gagne-t-on concrètement pour les tests ?
-- **Indépendance technologique et pérennité** : Le domaine porte la valeur métier de l'entreprise. En n'important ni Spring ni JPA, il est complètement agnostique des frameworks, des bases de données et des protocoles de transport. Une montée de version de Spring, un changement d'ORM ou un remplacement de framework n'impactera jamais le code métier.
-- **Gain concret pour les tests** : Les tests unitaires du domaine et de la couche application s'exécutent en **Java pur**, sans avoir à démarrer de conteneur Spring, de contexte web ou de base de données en mémoire. Les tests s'exécutent en quelques **millisecondes** (instantanés) et peuvent être facilement parallélisés.
-
-### 2. Pourquoi le service applicatif n'a-t-il ni `@Service` ni `@Transactional` ? Qui ouvre et ferme les transactions ?
-- Le service applicatif appartient au cœur applicatif et doit rester du code Java pur, exempt d'annotations de framework.
-- L'ouverture et la fermeture des transactions sont déléguées à une abstraction : le port sortant `TransactionRunner`. C'est son implémentation dans la couche adaptateur (`SpringTransactionRunner`, basée sur le `TransactionTemplate` de Spring) qui gère techniquement l'ouverture, le commit ou le rollback des transactions.
-
-### 3. Pourquoi garder deux classes distinctes `Coffee` et `CoffeeJpaEntity` au lieu d'annoter directement le domaine ?
-- **Séparation des responsabilités** : Le modèle du domaine (`Coffee`) modélise des règles métier et des invariants (constructeurs privés, méthodes expressives `rename`, `changePrice`, immuabilité des listes, objets-valeurs `Price`, `CoffeeId`).
-- `CoffeeJpaEntity` est un détail technique de stockage : JPA impose un constructeur sans argument (ou `protected`), des types primitifs ou wrappers (`Long`, `int`), des setters ou un accès direct aux champs, ainsi que des annotations de table et colonnes.
-- Cette séparation permet de modifier le schéma de la base de données (renommer des tables/colonnes, ajouter des index ou des tables de jointure) sans toucher à la moindre ligne du domaine.
-
-### 4. La règle « prix entre 0 et 200 » est vérifiée dans le domaine et dans une contrainte SQL, mais pas dans le DTO. Pourquoi ?
-- **Source unique de vérité pour la logique métier** : Les règles métier vivent dans le domaine (ici dans le constructeur compact de l'objet-valeur `Price`). Le DTO ne vérifie que la forme technique des données entrantes (`@NotNull`, `@NotBlank`). Si la règle changeait (ex: passage à 300), modifier un seul endroit (le domaine) suffit.
-- **Défense en profondeur** : La contrainte SQL `CHECK (price BETWEEN 0 AND 200)` constitue la dernière ligne de défense absolue au niveau du stockage pour garantir l'intégrité de la base même en cas de manipulation externe directe.
-
-### 5. Pourquoi un prix de 500 donne-t-il un 422 alors qu'un nom vide donne un 400 ?
-- **400 Bad Request** : La requête est mal formée au niveau syntaxique ou structurel. C'est l'annotation `@NotBlank` du DTO qui échoue avant même que le domaine ne soit invoqué.
-- **422 Unprocessable Entity** : La requête est syntaxiquement valide (le champ `price` est bien un entier non null), mais elle enfreint un **invariant sémantique/métier** (`DomainValidationException` levée par l'objet-valeur `Price`). L'adaptateur `RestExceptionHandler` intercepte cette exception et renvoie un statut 422.
-
-### 6. Que se passerait-il sans `@EntityGraph` sur le repository ? Comment l'observer dans les logs ?
-- **Problème du N+1 Selects** : Sans `@EntityGraph(attributePaths = "reviews")`, Spring Data JPA exécuterait une première requête `SELECT` pour charger la liste des cafés, puis, pour chaque café parcouru pour construire la réponse JSON, une requête SQL supplémentaire pour charger ses avis. Pour $N$ cafés, cela générerait $1 + N$ requêtes SQL.
-- **Observation dans les logs** : Avec `logging.level.org.hibernate.SQL=debug`, on verrait dans les logs une multitude de requêtes `select ... from review where coffee_id = ?` consécutives au lieu d'une unique requête `select ... from coffee left join review on ...`.
-
-### 7. Quels fichiers faudrait-il modifier pour remplacer H2 par PostgreSQL ? Le domaine et l'application changent-ils ?
-- **Fichiers modifiés** :
-  1. `pom.xml` : Remplacer la dépendance du pilote H2 par `org.postgresql:postgresql`.
-  2. `application.properties` / `application-dev.properties` : Modifier `spring.datasource.url` (`jdbc:postgresql://...`), `username`, `password`, et désactiver la console H2.
-  3. Fichiers SQL Flyway (`V1__create_coffee_schema.sql`) si des types SQL spécifiques diffèrent.
-- **Impact sur le domaine et l'application** : **Aucun**. Ni le domaine (`domain/`) ni l'application (`application/`) ne changent, ce qui démontre la flexibilité de l'architecture hexagonale.
-
-### 8. On ajoute un champ `origin` à `Coffee`. Que faut-il modifier, et dans quel ordre, avant puis après le premier déploiement en recette ?
-- **Avant le premier déploiement (développement en mémoire avec H2)** :
-  1. Domaine : Ajouter le champ `origin` dans l'agrégat `Coffee` et sa méthode de fabrique.
-  2. Entité JPA : Ajouter la colonne `@Column` dans `CoffeeJpaEntity`.
-  3. Mappers : Adapter `CoffeePersistenceMapper` et `CoffeeWebMapper` (et les DTOs/Commandes si exposés dans l'API).
-  4. Migration Flyway : Modifier directement `V1__create_coffee_schema.sql` (en dev, la base est recréée à chaque démarrage).
-- **Après le premier déploiement (base persistante en recette / production)** :
-  1. Ne **jamais** modifier `V1__create_coffee_schema.sql` (car son checksum est déjà enregistré dans `flyway_schema_history`).
-  2. Créer une nouvelle migration versionnée : `src/main/resources/db/migration/V2__add_origin_to_coffee.sql` contenant `ALTER TABLE coffee ADD COLUMN origin VARCHAR(255);`.
-  3. Mettre à jour l'entité JPA, les mappers et le domaine. Flyway appliquera automatiquement la migration V2 lors du déploiement.
+7. Quels fichiers faudrait-il modifier pour remplacer H2 par PostgreSQL ? Le domaine et l'application changent-ils ?
+pom.xml : remplacer H2 par org.postgresql:postgresql.
+et application.properties / application-dev.properties
+et sur la db
